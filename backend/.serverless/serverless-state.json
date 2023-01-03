@@ -1,0 +1,1131 @@
+{
+  "service": {
+    "service": "serverless-appsync-backend",
+    "serviceObject": {
+      "name": "serverless-appsync-backend"
+    },
+    "provider": {
+      "name": "aws",
+      "runtime": "nodejs12.x",
+      "lambdaHashingVersion": "20201221",
+      "stage": "dev",
+      "region": "us-east-2",
+      "versionFunctions": true,
+      "compiledCloudFormationTemplate": {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "The AWS CloudFormation template for this Serverless application",
+        "Resources": {
+          "ServerlessDeploymentBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+              "BucketEncryption": {
+                "ServerSideEncryptionConfiguration": [
+                  {
+                    "ServerSideEncryptionByDefault": {
+                      "SSEAlgorithm": "AES256"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ServerlessDeploymentBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+              "Bucket": {
+                "Ref": "ServerlessDeploymentBucket"
+              },
+              "PolicyDocument": {
+                "Statement": [
+                  {
+                    "Action": "s3:*",
+                    "Effect": "Deny",
+                    "Principal": "*",
+                    "Resource": [
+                      {
+                        "Fn::Join": [
+                          "",
+                          [
+                            "arn:",
+                            {
+                              "Ref": "AWS::Partition"
+                            },
+                            ":s3:::",
+                            {
+                              "Ref": "ServerlessDeploymentBucket"
+                            },
+                            "/*"
+                          ]
+                        ]
+                      },
+                      {
+                        "Fn::Join": [
+                          "",
+                          [
+                            "arn:",
+                            {
+                              "Ref": "AWS::Partition"
+                            },
+                            ":s3:::",
+                            {
+                              "Ref": "ServerlessDeploymentBucket"
+                            }
+                          ]
+                        ]
+                      }
+                    ],
+                    "Condition": {
+                      "Bool": {
+                        "aws:SecureTransport": false
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "booksTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+              "AttributeDefinitions": [
+                {
+                  "AttributeName": "bookId",
+                  "AttributeType": "S"
+                }
+              ],
+              "BillingMode": "PAY_PER_REQUEST",
+              "KeySchema": [
+                {
+                  "AttributeName": "bookId",
+                  "KeyType": "HASH"
+                }
+              ],
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": "books-table"
+                }
+              ]
+            }
+          },
+          "orderTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+              "AttributeDefinitions": [
+                {
+                  "AttributeName": "userId",
+                  "AttributeType": "S"
+                },
+                {
+                  "AttributeName": "orderId",
+                  "AttributeType": "S"
+                },
+                {
+                  "AttributeName": "bookId",
+                  "AttributeType": "S"
+                },
+                {
+                  "AttributeName": "createdAt",
+                  "AttributeType": "S"
+                }
+              ],
+              "BillingMode": "PAY_PER_REQUEST",
+              "KeySchema": [
+                {
+                  "AttributeName": "userId",
+                  "KeyType": "HASH"
+                },
+                {
+                  "AttributeName": "orderId",
+                  "KeyType": "RANGE"
+                }
+              ],
+              "GlobalSecondaryIndexes": [
+                {
+                  "IndexName": "byOrder",
+                  "KeySchema": [
+                    {
+                      "AttributeName": "bookId",
+                      "KeyType": "HASH"
+                    },
+                    {
+                      "AttributeName": "createdAt",
+                      "KeyType": "RANGE"
+                    }
+                  ],
+                  "Projection": {
+                    "ProjectionType": "ALL"
+                  }
+                }
+              ],
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": "order-table"
+                }
+              ]
+            }
+          },
+          "cognitoUserPool": {
+            "Type": "AWS::Cognito::UserPool",
+            "Properties": {
+              "UsernameAttributes": [
+                "email"
+              ],
+              "UserPoolName": "YouTubeBookstoreUserpool"
+            }
+          },
+          "cognitoUserPoolClient": {
+            "Type": "AWS::Cognito::UserPoolClient",
+            "Properties": {
+              "ClientName": "web",
+              "UserPoolId": {
+                "Ref": "cognitoUserPool"
+              }
+            }
+          },
+          "cognitoCustomerGroup": {
+            "Type": "AWS::Cognito::UserPoolGroup",
+            "Properties": {
+              "Description": "Customers belong to this group",
+              "GroupName": "customer",
+              "Precedence": 1,
+              "RoleArn": {
+                "Fn::GetAtt": [
+                  "cognitoCustomerIAMRole",
+                  "Arn"
+                ]
+              },
+              "UserPoolId": {
+                "Ref": "cognitoUserPool"
+              }
+            }
+          },
+          "cognitoCustomerIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "RoleName": "youtube-bookstore-customer-role",
+              "Description": "IAM role for customers",
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Federated": [
+                        "cognito-identity.amazonaws.com"
+                      ]
+                    },
+                    "Action": [
+                      "sts:AssumeRoleWithWebIdentity"
+                    ]
+                  }
+                ]
+              },
+              "Policies": [
+                {
+                  "PolicyName": "youtube-bookstore-customer-group-policy",
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "dynamodb:*"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::GetAtt": [
+                              "orderTable",
+                              "Arn"
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "dynamodb:GetItem",
+                          "dynamodb:BatchGetItem",
+                          "dynamodb:Query"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::GetAtt": [
+                              "booksTable",
+                              "Arn"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "cognitoAdminGroup": {
+            "Type": "AWS::Cognito::UserPoolGroup",
+            "Properties": {
+              "Description": "Admin users belong to this group",
+              "GroupName": "admin",
+              "Precedence": 0,
+              "RoleArn": {
+                "Fn::GetAtt": [
+                  "cognitoAdminIAMRole",
+                  "Arn"
+                ]
+              },
+              "UserPoolId": {
+                "Ref": "cognitoUserPool"
+              }
+            }
+          },
+          "cognitoAdminIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "RoleName": "youtube-bookstore-admin-role",
+              "Description": "IAM role for admin users",
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Federated": [
+                        "cognito-identity.amazonaws.com"
+                      ]
+                    },
+                    "Action": [
+                      "sts:AssumeRoleWithWebIdentity"
+                    ]
+                  }
+                ]
+              },
+              "Policies": [
+                {
+                  "PolicyName": "youtube-bookstore-admin-group-policy",
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "dynamodb:*"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::GetAtt": [
+                              "booksTable",
+                              "Arn"
+                            ]
+                          },
+                          {
+                            "Fn::GetAtt": [
+                              "orderTable",
+                              "Arn"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "cognitoUnauthIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "RoleName": "youtube-bookstore-unauth-role",
+              "Description": "IAM role for guest users",
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Federated": [
+                        "cognito-identity.amazonaws.com"
+                      ]
+                    },
+                    "Action": [
+                      "sts:AssumeRoleWithWebIdentity"
+                    ]
+                  }
+                ]
+              },
+              "Policies": [
+                {
+                  "PolicyName": "youtube-bookstore-unauth-user-policy",
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "appsync:GraphQL"
+                        ],
+                        "Resource": [
+                          "arn:aws:appsync:us-east-2:520790421665:apis/5r67rtvkq5avboaieffadurrwq/types/Query/fields/getBookById"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "cognitoIdentityPoolRoleAttachment": {
+            "Type": "AWS::Cognito::IdentityPoolRoleAttachment",
+            "Properties": {
+              "IdentityPoolId": {
+                "Ref": "cognitoIdentityPool"
+              },
+              "Roles": {
+                "unauthenticated": {
+                  "Fn::GetAtt": [
+                    "cognitoUnauthIAMRole",
+                    "Arn"
+                  ]
+                }
+              }
+            }
+          },
+          "cognitoIdentityPool": {
+            "Type": "AWS::Cognito::IdentityPool",
+            "Properties": {
+              "AllowUnauthenticatedIdentities": true,
+              "CognitoIdentityProviders": [
+                {
+                  "ClientId": {
+                    "Ref": "cognitoUserPoolClient"
+                  },
+                  "ProviderName": {
+                    "Fn::GetAtt": [
+                      "cognitoUserPool",
+                      "ProviderName"
+                    ]
+                  }
+                }
+              ],
+              "IdentityPoolName": "YoutubeBookStoreIdentityPool"
+            }
+          },
+          "GraphQlApi": {
+            "Type": "AWS::AppSync::GraphQLApi",
+            "Properties": {
+              "Name": "youtubeAppSyncAPI",
+              "AuthenticationType": "AMAZON_COGNITO_USER_POOLS",
+              "AdditionalAuthenticationProviders": [
+                {
+                  "AuthenticationType": "AWS_IAM"
+                }
+              ],
+              "UserPoolConfig": {
+                "AwsRegion": "us-east-2",
+                "UserPoolId": {
+                  "Ref": "cognitoUserPool"
+                },
+                "DefaultAction": "ALLOW"
+              },
+              "XrayEnabled": false
+            }
+          },
+          "GraphQlSchema": {
+            "Type": "AWS::AppSync::GraphQLSchema",
+            "Properties": {
+              "Definition": "schema {\n  query: Query\n  mutation: Mutation\n}\n\ntype Query {\n  getBookById(bookId: ID!): Book!\n  listBooks(limit: Int!, nextToken: String): BooksPage!\n  myOrders(limit: Int!, nextToken: String): OrderItemPage!\n}\n\ntype Book {\n  bookId: ID!\n  title: String!\n  description: String\n  imageUrl: AWSURL\n  author: String!\n  price: Float!\n  createdAt: AWSDateTime!\n  updatedAt: AWSDateTime!\n}\n\ntype BooksPage {\n  books: [Book]\n  nextToken: String\n}\n\ntype OrderItem {\n  userId: ID!\n  orderId: ID!\n  book: Book!\n  quantity: Int!\n}\n\ntype OrderItemPage {\n  orderItems: [OrderItem]\n  nextToken: String\n}\n\ntype Mutation {\n  createBook(newBook: BookInput): Book! @aws_auth(cognito_groups: [\"admin\"])\n  createOrder(newOrder: OrderInput): Boolean!\n}\n\ninput BookInput {\n  title: String!\n  description: String\n  imageUrl: AWSURL\n  author: String!\n  price: Float!\n}\n\ninput OrderInput {\n  items: [OrderItemInput]\n}\n\ninput OrderItemInput {\n  bookId: ID!\n  quantity: Int!\n}",
+              "ApiId": {
+                "Fn::GetAtt": [
+                  "GraphQlApi",
+                  "ApiId"
+                ]
+              }
+            }
+          },
+          "GraphQlDsbooksTableRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": [
+                        "appsync.amazonaws.com"
+                      ]
+                    },
+                    "Action": [
+                      "sts:AssumeRole"
+                    ]
+                  }
+                ]
+              },
+              "Policies": [
+                {
+                  "PolicyName": "GraphQlDsbooksTablePolicy",
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Action": [
+                          "dynamodb:DeleteItem",
+                          "dynamodb:GetItem",
+                          "dynamodb:PutItem",
+                          "dynamodb:Query",
+                          "dynamodb:Scan",
+                          "dynamodb:UpdateItem",
+                          "dynamodb:BatchGetItem",
+                          "dynamodb:BatchWriteItem",
+                          "dynamodb:ConditionCheckItem"
+                        ],
+                        "Effect": "Allow",
+                        "Resource": [
+                          {
+                            "Fn::Join": [
+                              ":",
+                              [
+                                "arn",
+                                "aws",
+                                "dynamodb",
+                                "us-east-2",
+                                {
+                                  "Ref": "AWS::AccountId"
+                                },
+                                {
+                                  "Fn::Join": [
+                                    "/",
+                                    [
+                                      "table",
+                                      {
+                                        "Ref": "booksTable"
+                                      }
+                                    ]
+                                  ]
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "Fn::Join": [
+                              "/",
+                              [
+                                {
+                                  "$ref": "$[\"service\"][\"provider\"][\"compiledCloudFormationTemplate\"][\"Resources\"][\"GraphQlDsbooksTableRole\"][\"Properties\"][\"Policies\"][0][\"PolicyDocument\"][\"Statement\"][0][\"Resource\"][0]"
+                                },
+                                "*"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "GraphQlDsbooksTable": {
+            "Type": "AWS::AppSync::DataSource",
+            "Properties": {
+              "ApiId": {
+                "Fn::GetAtt": [
+                  "GraphQlApi",
+                  "ApiId"
+                ]
+              },
+              "Name": "booksTable",
+              "Type": "AMAZON_DYNAMODB",
+              "ServiceRoleArn": {
+                "Fn::GetAtt": [
+                  "GraphQlDsbooksTableRole",
+                  "Arn"
+                ]
+              },
+              "DynamoDBConfig": {
+                "AwsRegion": "us-east-2",
+                "TableName": {
+                  "$ref": "$[\"service\"][\"provider\"][\"compiledCloudFormationTemplate\"][\"Resources\"][\"GraphQlDsbooksTableRole\"][\"Properties\"][\"Policies\"][0][\"PolicyDocument\"][\"Statement\"][0][\"Resource\"][0][\"Fn::Join\"][1][5][\"Fn::Join\"][1][1]"
+                },
+                "UseCallerCredentials": false,
+                "Versioned": false
+              }
+            }
+          },
+          "GraphQlResolverQuerygetBookById": {
+            "Type": "AWS::AppSync::Resolver",
+            "DependsOn": "GraphQlSchema",
+            "Properties": {
+              "ApiId": {
+                "Fn::GetAtt": [
+                  "GraphQlApi",
+                  "ApiId"
+                ]
+              },
+              "TypeName": "Query",
+              "FieldName": "getBookById",
+              "RequestMappingTemplate": "{\n    \"version\" : \"2017-02-28\",\n    \"operation\" : \"GetItem\",\n    \"key\" : {\n        \"bookId\" : $util.dynamodb.toDynamoDBJson($ctx.args.bookId),\n    },\n    \"consistentRead\" : true\n}",
+              "ResponseMappingTemplate": "$util.toJson($ctx.result)",
+              "Kind": "UNIT",
+              "DataSourceName": {
+                "Fn::GetAtt": [
+                  "GraphQlDsbooksTable",
+                  "Name"
+                ]
+              }
+            }
+          },
+          "GraphQlResolverMutationcreateBook": {
+            "Type": "AWS::AppSync::Resolver",
+            "DependsOn": "GraphQlSchema",
+            "Properties": {
+              "ApiId": {
+                "Fn::GetAtt": [
+                  "GraphQlApi",
+                  "ApiId"
+                ]
+              },
+              "TypeName": "Mutation",
+              "FieldName": "createBook",
+              "RequestMappingTemplate": "{\n    \"version\" : \"2017-02-28\",\n    \"operation\" : \"PutItem\",\n    \"key\" : {\n        \"bookId\" : $util.dynamodb.toDynamoDBJson($util.autoId()),\n    },\n    \"attributeValues\" : {\n        \"title\"    : $util.dynamodb.toDynamoDBJson($ctx.args.newBook.title),\n        \"description\" : $util.dynamodb.toDynamoDBJson($ctx.args.newBook.description),\n        \"imageUrl\"    : $util.dynamodb.toDynamoDBJson($ctx.args.newBook.imageUrl),\n        \"author\"    : $util.dynamodb.toDynamoDBJson($ctx.args.newBook.author),\n        \"price\" : $util.dynamodb.toDynamoDBJson($ctx.args.newBook.price),\n        \"createdAt\"    : $util.dynamodb.toDynamoDBJson($util.time.nowISO8601()),\n        \"updatedAt\" : $util.dynamodb.toDynamoDBJson($util.time.nowISO8601()),\n    }\n}",
+              "ResponseMappingTemplate": "$util.toJson($ctx.result)",
+              "Kind": "UNIT",
+              "DataSourceName": {
+                "Fn::GetAtt": [
+                  "GraphQlDsbooksTable",
+                  "Name"
+                ]
+              }
+            }
+          }
+        },
+        "Outputs": {
+          "ServerlessDeploymentBucketName": {
+            "Value": {
+              "Ref": "ServerlessDeploymentBucket"
+            },
+            "Export": {
+              "Name": "sls-serverless-appsync-backend-dev-ServerlessDeploymentBucketName"
+            }
+          },
+          "GraphQlApiId": {
+            "Value": {
+              "Fn::GetAtt": [
+                "GraphQlApi",
+                "ApiId"
+              ]
+            },
+            "Export": {
+              "Name": {
+                "Fn::Sub": "${AWS::StackName}-GraphQlApiId"
+              }
+            }
+          },
+          "GraphQlApiUrl": {
+            "Value": {
+              "Fn::GetAtt": [
+                "GraphQlApi",
+                "GraphQLUrl"
+              ]
+            },
+            "Export": {
+              "Name": {
+                "Fn::Sub": "${AWS::StackName}-GraphQlApiUrl"
+              }
+            }
+          }
+        }
+      },
+      "coreCloudFormationTemplate": {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "The AWS CloudFormation template for this Serverless application",
+        "Resources": {
+          "ServerlessDeploymentBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+              "BucketEncryption": {
+                "ServerSideEncryptionConfiguration": [
+                  {
+                    "ServerSideEncryptionByDefault": {
+                      "SSEAlgorithm": "AES256"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ServerlessDeploymentBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+              "Bucket": {
+                "Ref": "ServerlessDeploymentBucket"
+              },
+              "PolicyDocument": {
+                "Statement": [
+                  {
+                    "Action": "s3:*",
+                    "Effect": "Deny",
+                    "Principal": "*",
+                    "Resource": [
+                      {
+                        "Fn::Join": [
+                          "",
+                          [
+                            "arn:",
+                            {
+                              "Ref": "AWS::Partition"
+                            },
+                            ":s3:::",
+                            {
+                              "Ref": "ServerlessDeploymentBucket"
+                            },
+                            "/*"
+                          ]
+                        ]
+                      },
+                      {
+                        "Fn::Join": [
+                          "",
+                          [
+                            "arn:",
+                            {
+                              "Ref": "AWS::Partition"
+                            },
+                            ":s3:::",
+                            {
+                              "Ref": "ServerlessDeploymentBucket"
+                            }
+                          ]
+                        ]
+                      }
+                    ],
+                    "Condition": {
+                      "Bool": {
+                        "aws:SecureTransport": false
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "Outputs": {
+          "ServerlessDeploymentBucketName": {
+            "Value": {
+              "Ref": "ServerlessDeploymentBucket"
+            }
+          }
+        }
+      }
+    },
+    "custom": {
+      "appSync": {
+        "name": "youtubeAppSyncAPI",
+        "authenticationType": "AMAZON_COGNITO_USER_POOLS",
+        "additionalAuthenticationProviders": [
+          {
+            "authenticationType": "AWS_IAM"
+          }
+        ],
+        "userPoolConfig": {
+          "awsRegion": "us-east-2",
+          "defaultAction": "ALLOW",
+          "userPoolId": {
+            "$ref": "$[\"service\"][\"provider\"][\"compiledCloudFormationTemplate\"][\"Resources\"][\"GraphQlApi\"][\"Properties\"][\"UserPoolConfig\"][\"UserPoolId\"]"
+          }
+        },
+        "mappingTemplatesLocation": "mapping-templates",
+        "mappingTemplates": [
+          {
+            "dataSource": "booksTable",
+            "type": "Query",
+            "field": "getBookById"
+          },
+          {
+            "dataSource": "booksTable",
+            "type": "Mutation",
+            "field": "createBook"
+          }
+        ],
+        "dataSources": [
+          {
+            "type": "AMAZON_DYNAMODB",
+            "name": "booksTable",
+            "config": {
+              "tableName": {
+                "$ref": "$[\"service\"][\"provider\"][\"compiledCloudFormationTemplate\"][\"Resources\"][\"GraphQlDsbooksTableRole\"][\"Properties\"][\"Policies\"][0][\"PolicyDocument\"][\"Statement\"][0][\"Resource\"][0][\"Fn::Join\"][1][5][\"Fn::Join\"][1][1]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "plugins": [
+      "serverless-appsync-plugin"
+    ],
+    "pluginsData": {},
+    "functions": {},
+    "resources": {
+      "Resources": {
+        "booksTable": {
+          "Type": "AWS::DynamoDB::Table",
+          "Properties": {
+            "AttributeDefinitions": [
+              {
+                "AttributeName": "bookId",
+                "AttributeType": "S"
+              }
+            ],
+            "BillingMode": "PAY_PER_REQUEST",
+            "KeySchema": [
+              {
+                "AttributeName": "bookId",
+                "KeyType": "HASH"
+              }
+            ],
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": "books-table"
+              }
+            ]
+          }
+        },
+        "orderTable": {
+          "Type": "AWS::DynamoDB::Table",
+          "Properties": {
+            "AttributeDefinitions": [
+              {
+                "AttributeName": "userId",
+                "AttributeType": "S"
+              },
+              {
+                "AttributeName": "orderId",
+                "AttributeType": "S"
+              },
+              {
+                "AttributeName": "bookId",
+                "AttributeType": "S"
+              },
+              {
+                "AttributeName": "createdAt",
+                "AttributeType": "S"
+              }
+            ],
+            "BillingMode": "PAY_PER_REQUEST",
+            "KeySchema": [
+              {
+                "AttributeName": "userId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "orderId",
+                "KeyType": "RANGE"
+              }
+            ],
+            "GlobalSecondaryIndexes": [
+              {
+                "IndexName": "byOrder",
+                "KeySchema": [
+                  {
+                    "AttributeName": "bookId",
+                    "KeyType": "HASH"
+                  },
+                  {
+                    "AttributeName": "createdAt",
+                    "KeyType": "RANGE"
+                  }
+                ],
+                "Projection": {
+                  "ProjectionType": "ALL"
+                }
+              }
+            ],
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": "order-table"
+              }
+            ]
+          }
+        },
+        "cognitoUserPool": {
+          "Type": "AWS::Cognito::UserPool",
+          "Properties": {
+            "UsernameAttributes": [
+              "email"
+            ],
+            "UserPoolName": "YouTubeBookstoreUserpool"
+          }
+        },
+        "cognitoUserPoolClient": {
+          "Type": "AWS::Cognito::UserPoolClient",
+          "Properties": {
+            "ClientName": "web",
+            "UserPoolId": {
+              "Ref": "cognitoUserPool"
+            }
+          }
+        },
+        "cognitoCustomerGroup": {
+          "Type": "AWS::Cognito::UserPoolGroup",
+          "Properties": {
+            "Description": "Customers belong to this group",
+            "GroupName": "customer",
+            "Precedence": 1,
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "cognitoCustomerIAMRole",
+                "Arn"
+              ]
+            },
+            "UserPoolId": {
+              "Ref": "cognitoUserPool"
+            }
+          }
+        },
+        "cognitoCustomerIAMRole": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+            "RoleName": "youtube-bookstore-customer-role",
+            "Description": "IAM role for customers",
+            "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": [
+                      "cognito-identity.amazonaws.com"
+                    ]
+                  },
+                  "Action": [
+                    "sts:AssumeRoleWithWebIdentity"
+                  ]
+                }
+              ]
+            },
+            "Policies": [
+              {
+                "PolicyName": "youtube-bookstore-customer-group-policy",
+                "PolicyDocument": {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "dynamodb:*"
+                      ],
+                      "Resource": [
+                        {
+                          "Fn::GetAtt": [
+                            "orderTable",
+                            "Arn"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "dynamodb:GetItem",
+                        "dynamodb:BatchGetItem",
+                        "dynamodb:Query"
+                      ],
+                      "Resource": [
+                        {
+                          "Fn::GetAtt": [
+                            "booksTable",
+                            "Arn"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "cognitoAdminGroup": {
+          "Type": "AWS::Cognito::UserPoolGroup",
+          "Properties": {
+            "Description": "Admin users belong to this group",
+            "GroupName": "admin",
+            "Precedence": 0,
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "cognitoAdminIAMRole",
+                "Arn"
+              ]
+            },
+            "UserPoolId": {
+              "Ref": "cognitoUserPool"
+            }
+          }
+        },
+        "cognitoAdminIAMRole": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+            "RoleName": "youtube-bookstore-admin-role",
+            "Description": "IAM role for admin users",
+            "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": [
+                      "cognito-identity.amazonaws.com"
+                    ]
+                  },
+                  "Action": [
+                    "sts:AssumeRoleWithWebIdentity"
+                  ]
+                }
+              ]
+            },
+            "Policies": [
+              {
+                "PolicyName": "youtube-bookstore-admin-group-policy",
+                "PolicyDocument": {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "dynamodb:*"
+                      ],
+                      "Resource": [
+                        {
+                          "Fn::GetAtt": [
+                            "booksTable",
+                            "Arn"
+                          ]
+                        },
+                        {
+                          "Fn::GetAtt": [
+                            "orderTable",
+                            "Arn"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "cognitoUnauthIAMRole": {
+          "Type": "AWS::IAM::Role",
+          "Properties": {
+            "RoleName": "youtube-bookstore-unauth-role",
+            "Description": "IAM role for guest users",
+            "AssumeRolePolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Principal": {
+                    "Federated": [
+                      "cognito-identity.amazonaws.com"
+                    ]
+                  },
+                  "Action": [
+                    "sts:AssumeRoleWithWebIdentity"
+                  ]
+                }
+              ]
+            },
+            "Policies": [
+              {
+                "PolicyName": "youtube-bookstore-unauth-user-policy",
+                "PolicyDocument": {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Effect": "Allow",
+                      "Action": [
+                        "appsync:GraphQL"
+                      ],
+                      "Resource": [
+                        "arn:aws:appsync:us-east-2:520790421665:apis/5r67rtvkq5avboaieffadurrwq/types/Query/fields/getBookById"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "cognitoIdentityPoolRoleAttachment": {
+          "Type": "AWS::Cognito::IdentityPoolRoleAttachment",
+          "Properties": {
+            "IdentityPoolId": {
+              "Ref": "cognitoIdentityPool"
+            },
+            "Roles": {
+              "unauthenticated": {
+                "Fn::GetAtt": [
+                  "cognitoUnauthIAMRole",
+                  "Arn"
+                ]
+              }
+            }
+          }
+        },
+        "cognitoIdentityPool": {
+          "Type": "AWS::Cognito::IdentityPool",
+          "Properties": {
+            "AllowUnauthenticatedIdentities": true,
+            "CognitoIdentityProviders": [
+              {
+                "ClientId": {
+                  "Ref": "cognitoUserPoolClient"
+                },
+                "ProviderName": {
+                  "Fn::GetAtt": [
+                    "cognitoUserPool",
+                    "ProviderName"
+                  ]
+                }
+              }
+            ],
+            "IdentityPoolName": "YoutubeBookStoreIdentityPool"
+          }
+        }
+      },
+      "Outputs": {}
+    },
+    "configValidationMode": "warn",
+    "serviceFilename": "serverless.yml",
+    "initialServerlessConfig": {
+      "service": {
+        "$ref": "$[\"service\"][\"serviceObject\"]"
+      },
+      "frameworkVersion": "2",
+      "provider": {
+        "$ref": "$[\"service\"][\"provider\"]"
+      },
+      "plugins": {
+        "$ref": "$[\"service\"][\"plugins\"]"
+      },
+      "custom": {
+        "$ref": "$[\"service\"][\"custom\"]"
+      },
+      "resources": {
+        "$ref": "$[\"service\"][\"resources\"]"
+      }
+    },
+    "layers": {},
+    "isDashboardMonitoringPreconfigured": false
+  },
+  "package": {
+    "artifactDirectoryName": "serverless/serverless-appsync-backend/dev/1672748038983-2023-01-03T12:13:58.983Z",
+    "artifact": ""
+  }
+}
